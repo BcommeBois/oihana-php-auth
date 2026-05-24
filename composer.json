@@ -1,0 +1,84 @@
+{
+    "name" : "oihana/php-auth" ,
+    "type" : "library" ,
+    "description" : "Composable PHP authorization toolkit — Casbin RBAC enforcer, JWT/OIDC verification (JWKS), fine-grained capabilities, validation rules and ready-to-use HTTP middlewares for API protection." ,
+    "keywords" : [
+        "php" ,
+        "auth" ,
+        "authorization" ,
+        "authentication" ,
+        "casbin" ,
+        "rbac" ,
+        "jwt" ,
+        "jwks" ,
+        "oidc" ,
+        "oauth2" ,
+        "capabilities" ,
+        "middleware" ,
+        "api-security"
+    ] ,
+    "homepage" : "https://github.com/BcommeBois/oihana-php-auth" ,
+    "license" : "MPL-2.0" ,
+    "authors" : [
+        {
+            "name"     : "Marc Alcaraz" ,
+            "email"    : "marc@ooop.fr" ,
+            "homepage" : "https://www.ooop.fr" ,
+            "role"     : "Project Founder, Lead Developer."
+        }
+    ] ,
+    "support" : {
+        "email"  : "marc@ooop.fr" ,
+        "issues" : "https://github.com/BcommeBois/oihana-php-auth/issues" ,
+        "source" : "https://github.com/BcommeBois/oihana-php-auth"
+    } ,
+    "scripts" : {
+        "doc"  : "rm -rf docs && mkdir docs && cp -r assets docs/assets && ./vendor/bin/phpdoc -c phpdoc.xml -v" ,
+        "test" : "./vendor/bin/phpunit"
+    } ,
+    "autoload" : {
+        "psr-4" : {
+            "oihana\\auth\\" : "src/oihana/auth"
+        } ,
+        "files" : [
+            "src/oihana/auth/helpers/casbinSafeSubject.php" ,
+            "src/oihana/auth/jwt/helpers/decodeJwtClaims.php" ,
+            "src/oihana/auth/jwt/helpers/extractFromClaims.php" ,
+            "src/oihana/auth/jwt/helpers/extractSidFromClaims.php"
+        ]
+    } ,
+    "autoload-dev" : {
+        "psr-4" : {
+            "tests\\oihana\\auth\\" : "tests/oihana/auth"
+        }
+    } ,
+    "require" : {
+        "php"                       : ">=8.4" ,
+        "ext-memcached"             : "*" ,
+        "casbin/casbin"             : "^4.0" ,
+        "firebase/php-jwt"          : "^7.0" ,
+        "guzzlehttp/guzzle"         : "^7.10" ,
+        "php-di/php-di"             : "^7.0" ,
+        "psr/container"             : "^2.0" ,
+        "psr/http-message"          : "^2.0" ,
+        "psr/log"                   : "^3.0" ,
+        "somnambulist/validation"   : "^1.12" ,
+        "oihana/php-enums"          : "dev-main" ,
+        "oihana/php-exceptions"     : "dev-main" ,
+        "oihana/php-reflect"        : "dev-main" ,
+        "oihana/php-schema"         : "dev-main" ,
+        "oihana/php-system"         : "dev-main"
+    } ,
+    "require-dev" : {
+        "phpunit/phpunit"        : "^12" ,
+        "nunomaduro/collision"   : "^8.8" ,
+        "phpdocumentor/shim"     : "^3.8"
+    } ,
+    "minimum-stability" : "dev" ,
+    "prefer-stable" : true ,
+    "config" : {
+        "allow-plugins" : {
+            "phpdocumentor/shim" : true
+        }
+    }
+}
