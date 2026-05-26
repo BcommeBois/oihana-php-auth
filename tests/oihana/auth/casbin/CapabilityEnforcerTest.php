@@ -18,7 +18,7 @@ class CapabilityEnforcerTest extends TestCase
     private const string USER_ID         = 'user-abc-123' ;
     private const string NUMERIC_USER_ID = '364646423545321675' ;
     private const string SAFE_NUMERIC_ID = 'n_364646423545321675' ;
-    private const string DOMAIN          = 'bouney-api' ;
+    private const string DOMAIN          = 'my-api' ;
     private const string OBJECT          = '/products' ;
     private const string CAPABILITY      = 'skin.offers.full' ;
     private const string ACTION          = 'PARAM:skin.offers.full' ;

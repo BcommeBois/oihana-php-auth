@@ -48,7 +48,7 @@ class CapabilityFieldsFixture
 class CapabilityFieldsTraitTest extends TestCase
 {
     private const string USER_ID            = 'user-fields-001' ;
-    private const string DOMAIN             = 'bouney-api' ;
+    private const string DOMAIN             = 'my-api' ;
     private const string OBJECT             = '/users' ;
     private const string SUBJECT_STATUS     = 'users:status:update' ;
     private const string SUBJECT_IDENTITY   = 'users:identity:update' ;

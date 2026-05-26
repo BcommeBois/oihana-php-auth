@@ -49,7 +49,7 @@ class CapabilityGuardFixture
 class CapabilityGuardTraitTest extends TestCase
 {
     private const string USER_ID         = 'user-abc-123' ;
-    private const string DOMAIN          = 'bouney-api' ;
+    private const string DOMAIN          = 'my-api' ;
     private const string OBJECT          = '/products' ;
     private const string SKIN_FULL       = 'offers.full' ;
     private const string SKIN_DEFAULT    = 'offers' ;

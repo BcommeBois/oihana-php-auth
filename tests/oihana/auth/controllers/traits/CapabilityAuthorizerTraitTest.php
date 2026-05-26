@@ -35,7 +35,7 @@ final class CapabilityAuthorizerTraitFixture
 final class CapabilityAuthorizerTraitTest extends TestCase
 {
     private const string OBJECT      = '/users' ;
-    private const string DOMAIN      = 'bouney-api' ;
+    private const string DOMAIN      = 'my-api' ;
     private const string ALPHA_ID    = 'alice' ;
     private const string NUMERIC_ID  = '364646423545321675' ;
     private const string SAFE_NUMERIC = 'n_364646423545321675' ;

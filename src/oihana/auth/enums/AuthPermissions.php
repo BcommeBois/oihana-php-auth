@@ -21,7 +21,7 @@ use oihana\reflect\traits\ConstantsTrait;
  * e.g. `USERS_LIST`).
  *
  * Projects extend this class to add their own business-specific
- * permissions (see `fr\bouney\enums\Permissions`).
+ * permissions (see `App\Enums\Permissions`).
  *
  * Invariant: every constant value must correspond to a
  * `[[permissions]].subject` declared in the relevant seed TOML
