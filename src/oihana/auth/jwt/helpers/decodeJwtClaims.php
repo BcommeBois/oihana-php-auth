@@ -2,6 +2,8 @@
 
 namespace oihana\auth\jwt\helpers ;
 
+use function oihana\core\encoding\base64UrlDecode ;
+
 /**
  * Decodes the claim section of a compact-serialized JWT without verifying
  * its signature.
@@ -48,7 +50,7 @@ function decodeJwtClaims( string $jwt ) :?array
         return null ;
     }
 
-    $payload = base64_decode( strtr( $parts[ 1 ] , '-_' , '+/' ) , true ) ;
+    $payload = base64UrlDecode( $parts[ 1 ] ) ;
 
     if( !is_string( $payload ) )
     {

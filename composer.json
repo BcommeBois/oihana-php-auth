@@ -63,6 +63,7 @@
         "psr/http-message"          : "^2.0" ,
         "psr/log"                   : "^3.0" ,
         "somnambulist/validation"   : "^1.12" ,
+        "oihana/php-core"           : "dev-main" ,
         "oihana/php-enums"          : "dev-main" ,
         "oihana/php-exceptions"     : "dev-main" ,
         "oihana/php-reflect"        : "dev-main" ,
