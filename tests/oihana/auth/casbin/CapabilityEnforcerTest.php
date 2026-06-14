@@ -271,6 +271,76 @@ class CapabilityEnforcerTest extends TestCase
     }
 
     /**
+     * Tests that enforceObjectAction() passes the raw (object, action) couple to
+     * Casbin without applying the `PARAM:` prefix that has() uses.
+     */
+    public function testEnforceObjectActionDelegatesWithoutParamPrefix() : void
+    {
+        $capturedArgs = [] ;
+
+        $enforcer = $this->createStub( Enforcer::class ) ;
+        $enforcer->method( 'enforce' )->willReturnCallback
+        (
+            function ( ...$args ) use ( &$capturedArgs ) : bool
+            {
+                $capturedArgs = $args ;
+                return true ;
+            }
+        ) ;
+
+        $capability = new CapabilityEnforcer( $enforcer , self::DOMAIN ) ;
+
+        $this->assertTrue( $capability->enforceObjectAction( self::USER_ID , '/roles/1/permissions' , 'GET' ) ) ;
+
+        $this->assertSame( self::USER_ID            , $capturedArgs[ 0 ] ?? null ) ;
+        $this->assertSame( self::DOMAIN             , $capturedArgs[ 1 ] ?? null ) ;
+        $this->assertSame( '/roles/1/permissions'   , $capturedArgs[ 2 ] ?? null ) ;
+        $this->assertSame( 'GET'                    , $capturedArgs[ 3 ] ?? null ) ; // raw action, no PARAM: prefix
+    }
+
+    /**
+     * Tests that enforceObjectAction() also normalises a purely-numeric userId
+     * via safeSubject before delegating to Casbin.
+     */
+    public function testEnforceObjectActionNormalisesNumericUserId() : void
+    {
+        $capturedSubject = null ;
+
+        $enforcer = $this->createStub( Enforcer::class ) ;
+        $enforcer->method( 'enforce' )->willReturnCallback
+        (
+            function ( string $subject ) use ( &$capturedSubject ) : bool
+            {
+                $capturedSubject = $subject ;
+                return false ;
+            }
+        ) ;
+
+        $capability = new CapabilityEnforcer( $enforcer , self::DOMAIN ) ;
+        $capability->enforceObjectAction( self::NUMERIC_USER_ID , self::OBJECT , 'GET' ) ;
+
+        $this->assertSame( self::SAFE_NUMERIC_ID , $capturedSubject ) ;
+    }
+
+    /**
+     * Tests that isDenied() skips non-array entries in the implicit permissions
+     * list before matching a later deny tuple.
+     */
+    public function testIsDeniedSkipsNonArrayPermissionEntries() : void
+    {
+        $enforcer = $this->createStub( Enforcer::class ) ;
+        $enforcer->method( 'getImplicitPermissionsForUser' )->willReturn
+        ([
+            'not-an-array' , // skipped by the is_array guard
+            [ 'someRole' , self::DOMAIN , self::OBJECT , self::ACTION , 'deny' ] ,
+        ]) ;
+
+        $capability = new CapabilityEnforcer( $enforcer , self::DOMAIN ) ;
+
+        $this->assertTrue( $capability->isDenied( self::USER_ID , self::OBJECT , self::CAPABILITY ) ) ;
+    }
+
+    /**
      * Tests that check() throws on unknown mode.
      */
     public function testCheckThrowsOnUnknownMode() : void
