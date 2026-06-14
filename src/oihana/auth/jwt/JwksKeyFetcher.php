@@ -7,6 +7,7 @@ use Firebase\JWT\JWK;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 
+use oihana\enums\http\GuzzleOption;
 use xyz\oihana\schema\constants\JWTAlgorithm;
 
 use Memcached;
@@ -122,7 +123,7 @@ class JwksKeyFetcher
     {
         try
         {
-            $client   = new Client([ 'timeout' => 10 , 'verify' => true ]) ;
+            $client   = new Client([ GuzzleOption::TIMEOUT => 10 , GuzzleOption::VERIFY => true ]) ;
             $response = $client->get( $this->jwksUri ) ;
 
             $body = $response->getBody()->getContents() ;
