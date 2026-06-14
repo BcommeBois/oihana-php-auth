@@ -145,12 +145,9 @@ trait DocumentsControllerCapabilitiesTrait
             return $search ;
         }
 
-        $paramConfig = $this->activeParamConfig( ControllerParam::SEARCH ) ;
-
-        if ( $paramConfig === null )
-        {
-            return $search ;
-        }
+        // Reaching here means hasCapability() returned false, which only happens
+        // when a SEARCH capability is declared — so the param config is present.
+        $paramConfig = $this->activeParamConfig( ControllerParam::SEARCH ) ?? [] ;
 
         $fallback = $this->applyCapabilityPolicy( $paramConfig , $search ) ;
         $effective = is_string( $fallback ) ? $fallback : null ;
