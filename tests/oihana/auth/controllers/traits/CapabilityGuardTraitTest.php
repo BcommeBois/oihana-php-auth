@@ -33,6 +33,7 @@ class CapabilityGuardFixture
         enforceParam           as public ;
         hasCapability          as public ;
         initializeCapabilities as public ;
+        isCapabilityAllowed    as public ;
     }
 
     /**
@@ -1242,5 +1243,132 @@ class CapabilityGuardTraitTest extends TestCase
             self::SKIN_FULL ,
             $fixture->enforceParam( $this->makeRequest() , ControllerParam::SKIN , self::SKIN_FULL )
         ) ;
+    }
+
+    // -------------------------------------------------------------------------
+    // Guard edge cases (one-liner defensive branches)
+    // -------------------------------------------------------------------------
+
+    /**
+     * hasCapability() treats a non-string SUBJECT as an open no-op (returns true).
+     * @throws CasbinException
+     */
+    public function testHasCapabilityReturnsTrueWhenSubjectNotString() : void
+    {
+        $init =
+        [
+            ControllerParam::CAPABILITIES =>
+            [
+                Capability::OBJECT => self::OBJECT ,
+                'export'           => [ Capability::SUBJECT => 123 ] , // non-string
+            ],
+        ] ;
+
+        $fixture = new CapabilityGuardFixture( $init , $this->makeEnforcer( allow : false ) ) ;
+
+        $this->assertTrue( $fixture->hasCapability( $this->makeRequest() , 'export' ) ) ;
+    }
+
+    /**
+     * enforceFilterKeys() is a no-op when the param declares no KEYS mapping.
+     * @throws CasbinException
+     * @throws Error403
+     */
+    public function testEnforceFilterKeysNoOpWhenKeysMapAbsent() : void
+    {
+        $init =
+        [
+            ControllerParam::CAPABILITIES =>
+            [
+                Capability::OBJECT      => self::OBJECT ,
+                ControllerParam::FILTER => [ Capability::POLICY => CapabilityPolicy::SILENT_DOWNGRADE ] , // no KEYS
+            ],
+        ] ;
+
+        $fixture = new CapabilityGuardFixture( $init , $this->makeEnforcer( allow : false ) ) ;
+        $filters = [ [ 'key' => 'costPrice' , 'op' => 'gt' , 'val' => 100 ] ] ;
+
+        $this->assertSame( $filters , $fixture->enforceFilterKeys( $this->makeRequest() , ControllerParam::FILTER , $filters ) ) ;
+    }
+
+    /**
+     * A key whose mapped subject is not a parseable capability entry (associative
+     * array with neither REQUIRE nor DENY) resolves to "allowed" → clause kept.
+     * Exercises the (null, null) fall-through of parseCapabilityEntry().
+     * @throws CasbinException
+     * @throws Error403
+     */
+    public function testEnforceFilterKeysAllowsKeyWithUnparsableSubject() : void
+    {
+        $init =
+        [
+            ControllerParam::CAPABILITIES =>
+            [
+                Capability::OBJECT      => self::OBJECT ,
+                ControllerParam::FILTER =>
+                [
+                    Capability::POLICY => CapabilityPolicy::SILENT_DOWNGRADE ,
+                    Capability::KEYS   => [ 'costPrice' => [ 'foo' => 'bar' ] ] , // unparsable entry
+                ],
+            ],
+        ] ;
+
+        $fixture = new CapabilityGuardFixture( $init , $this->makeEnforcer( allow : false ) ) ;
+        $filters = [ [ 'key' => 'costPrice' , 'op' => 'gt' , 'val' => 100 ] ] ;
+
+        $this->assertSame( $filters , $fixture->enforceFilterKeys( $this->makeRequest() , ControllerParam::FILTER , $filters ) ) ;
+    }
+
+    /**
+     * A key mapped via the long form `[ Capability::REQUIRE => 'subject' ]` is
+     * gated like the string shortcut. Exercises the long-form REQUIRE branch.
+     * @throws CasbinException
+     * @throws Error403
+     */
+    public function testEnforceFilterKeysSupportsLongFormRequireSubject() : void
+    {
+        $init =
+        [
+            ControllerParam::CAPABILITIES =>
+            [
+                Capability::OBJECT      => self::OBJECT ,
+                ControllerParam::FILTER =>
+                [
+                    Capability::POLICY => CapabilityPolicy::SILENT_DOWNGRADE ,
+                    Capability::KEYS   =>
+                    [
+                        'costPrice' => [ Capability::REQUIRE => 'products:filter.costPrice' ] ,
+                    ],
+                ],
+            ],
+        ] ;
+
+        $fixture = new CapabilityGuardFixture( $init , $this->makeEnforcer( allow : true ) ) ;
+        $filters = [ [ 'key' => 'costPrice' , 'op' => 'gt' , 'val' => 100 ] ] ;
+
+        $this->assertSame( $filters , $fixture->enforceFilterKeys( $this->makeRequest() , ControllerParam::FILTER , $filters ) ) ;
+    }
+
+    /**
+     * isCapabilityAllowed() fails closed for REQUIRE when no enforcer is injected
+     * (the defensive null-enforcer guard reachable only in isolation).
+     * @throws CasbinException
+     */
+    public function testIsCapabilityAllowedWithoutEnforcerFailsClosedForRequire() : void
+    {
+        $fixture = new CapabilityGuardFixture( [] , null ) ; // no enforcer
+
+        $this->assertFalse( $fixture->isCapabilityAllowed( $this->makeRequest() , 'products:export' ) ) ;
+    }
+
+    /**
+     * isCapabilityAllowed() passes through for DENY when no enforcer is injected.
+     * @throws CasbinException
+     */
+    public function testIsCapabilityAllowedWithoutEnforcerPassesForDeny() : void
+    {
+        $fixture = new CapabilityGuardFixture( [] , null ) ; // no enforcer
+
+        $this->assertTrue( $fixture->isCapabilityAllowed( $this->makeRequest() , [ Capability::DENY => 'products:locked' ] ) ) ;
     }
 }

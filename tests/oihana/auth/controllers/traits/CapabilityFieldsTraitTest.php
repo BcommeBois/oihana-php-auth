@@ -342,4 +342,67 @@ class CapabilityFieldsTraitTest extends TestCase
 
         $this->assertSame( $body , $result ) ;
     }
+
+    /**
+     * Invalid entries (empty string, non-string) inside a subject's field list
+     * are skipped during the inverse-map build, while the valid field is still
+     * gated. Exercises the per-field skip branch.
+     */
+    public function testFieldListSkipsInvalidEntriesButGatesValidOnes() : void
+    {
+        $init =
+        [
+            ControllerParam::CAPABILITIES =>
+            [
+                Capability::OBJECT => self::OBJECT ,
+                Capability::FIELDS =>
+                [
+                    Capability::POLICY => CapabilityPolicy::STRICT ,
+                    Capability::VALUES =>
+                    [
+                        self::SUBJECT_STATUS => [ '' , 42 , 'status' ] , // only 'status' is valid
+                    ],
+                ],
+            ],
+        ] ;
+
+        $fixture = new CapabilityFieldsFixture( $init , $this->makeEnforcer( false ) ) ;
+
+        // The invalid entries were skipped → only 'status' is gated → denied → 403.
+        $this->expectException( Error403::class ) ;
+        $this->expectExceptionMessage( "Forbidden field: 'status'" ) ;
+
+        $fixture->enforceFields( $this->makeRequest() , [ 'status' => 'disabled' ] ) ;
+    }
+
+    /**
+     * When every declared subject maps only to invalid fields, the inverse map
+     * is empty and the body is returned untouched (no Casbin call). Exercises
+     * the empty-map short-circuit.
+     */
+    public function testAllInvalidFieldsLeavesBodyUntouched() : void
+    {
+        $init =
+        [
+            ControllerParam::CAPABILITIES =>
+            [
+                Capability::OBJECT => self::OBJECT ,
+                Capability::FIELDS =>
+                [
+                    Capability::POLICY => CapabilityPolicy::STRICT ,
+                    Capability::VALUES =>
+                    [
+                        self::SUBJECT_STATUS => [ '' , 42 ] , // no valid field at all
+                    ],
+                ],
+            ],
+        ] ;
+
+        $fixture = new CapabilityFieldsFixture( $init , $this->makeEnforcer( false ) ) ;
+
+        $body = [ 'status' => 'disabled' ] ;
+
+        // Inverse map empty → body returned unchanged even though Casbin denies.
+        $this->assertSame( $body , $fixture->enforceFields( $this->makeRequest() , $body ) ) ;
+    }
 }
