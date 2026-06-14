@@ -60,6 +60,7 @@
     "require" : {
         "php"                       : ">=8.4" ,
         "ext-memcached"             : "*" ,
+        "ext-openssl"               : "*" ,
         "casbin/casbin"             : "^4.0" ,
         "firebase/php-jwt"          : "^7.0" ,
         "guzzlehttp/guzzle"         : "^7.10" ,
