@@ -26,13 +26,22 @@ class JwksKeyFetcher
 {
     /**
      * Creates a new JwksKeyFetcher instance.
+     *
+     * @param Memcached            $cache      Cache backend for the raw JWKS JSON.
+     * @param string               $jwksUri    The JWKS endpoint URL.
+     * @param LoggerInterface|null $logger     Optional logger.
+     * @param Client|null          $httpClient Optional Guzzle client (defaults to a TLS-verifying client with a 10s timeout); injectable for testing.
      */
     public function __construct
     (
         protected Memcached          $cache ,
         protected string             $jwksUri ,
-        protected ?LoggerInterface   $logger = null
-    ) {}
+        protected ?LoggerInterface   $logger     = null ,
+        protected ?Client            $httpClient = null
+    )
+    {
+        $this->httpClient ??= new Client([ GuzzleOption::TIMEOUT => 10 , GuzzleOption::VERIFY => true ]) ;
+    }
 
     /**
      * Memcached cache key for JWKS data.
@@ -67,11 +76,16 @@ class JwksKeyFetcher
 
         if( !$json )
         {
-            $json = $this->fetchJwks() ;
-
-            if( $json )
+            try
             {
+                $json = $this->httpClient->get( $this->jwksUri )->getBody()->getContents() ;
+                $this->logger?->info( "JwksKeyFetcher: fetched JWKS from $this->jwksUri" ) ;
                 $this->cache->set( self::CACHE_KEY , $json , self::CACHE_TTL ) ;
+            }
+            catch( GuzzleException $e )
+            {
+                $this->logger?->error( "JwksKeyFetcher: failed to fetch JWKS: {$e->getMessage()}" ) ;
+                $json = null ;
             }
         }
 
@@ -110,32 +124,5 @@ class JwksKeyFetcher
         $this->logger?->info( 'JwksKeyFetcher: forced refresh of JWKS keys' ) ;
 
         return $this->getKeys() ;
-    }
-
-    // =========================================================================
-    // Private
-    // =========================================================================
-
-    /**
-     * Fetches the JWKS JSON from the endpoint.
-     */
-    private function fetchJwks() :?string
-    {
-        try
-        {
-            $client   = new Client([ GuzzleOption::TIMEOUT => 10 , GuzzleOption::VERIFY => true ]) ;
-            $response = $client->get( $this->jwksUri ) ;
-
-            $body = $response->getBody()->getContents() ;
-
-            $this->logger?->info( "JwksKeyFetcher: fetched JWKS from $this->jwksUri" ) ;
-
-            return $body ;
-        }
-        catch( GuzzleException $e )
-        {
-            $this->logger?->error( "JwksKeyFetcher: failed to fetch JWKS: {$e->getMessage()}" ) ;
-            return null ;
-        }
     }
 }
