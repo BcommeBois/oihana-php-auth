@@ -119,8 +119,29 @@ $tCst = (int) $pr['coveredstatements'];
 $tMe  = (int) $pr['methods'];
 $tCme = (int) $pr['coveredmethods'];
 
-$linePct = $tSt ? $tCst / $tSt * 100 : 100.0;
-$methPct = $tMe ? $tCme / $tMe * 100 : 100.0;
+// Class totals (PHPUnit-style): Clover's project metrics carry no covered-class
+// count, so derive it from the per-class metrics. A class enters the tally only
+// once it has executable code — interfaces, enums and constant-only classes have
+// zero statements and are skipped, matching PHPUnit's `classes` figure — and
+// counts as covered when every one of its statements ran.
+
+$tCls  = 0;
+$tCCls = 0;
+
+foreach ( $xml->xpath( '//class' ) as $c )
+{
+    $cst = (int) $c->metrics['statements'];
+
+    if ( $cst === 0 ) { continue; }
+
+    $tCls++;
+
+    if ( (int) $c->metrics['coveredstatements'] === $cst ) { $tCCls++; }
+}
+
+$linePct  = $tSt  ? $tCst  / $tSt  * 100 : 100.0;
+$methPct  = $tMe  ? $tCme  / $tMe  * 100 : 100.0;
+$classPct = $tCls ? $tCCls / $tCls * 100 : 100.0;
 
 $bar = static fn( float $p ): string =>
     str_repeat( '#' , (int) round( $p / 10 ) ) . str_repeat( '.' , 10 - (int) round( $p / 10 ) );
@@ -153,8 +174,9 @@ $delta = static function ( float $cur , ?float $old , int $curN , ?int $oldN , s
     return sprintf( '%s %s (%+d %s)' , $arrow , $pts , $dn , $unit );
 };
 
-$lineDelta = $delta( $linePct , $prev['lines']['pct']   ?? null , $tCst , $prev['lines']['cst']   ?? null , 'lines' );
-$methDelta = $delta( $methPct , $prev['methods']['pct'] ?? null , $tCme , $prev['methods']['cme'] ?? null , 'methods' );
+$lineDelta  = $delta( $linePct  , $prev['lines']['pct']   ?? null , $tCst  , $prev['lines']['cst']    ?? null , 'lines' );
+$methDelta  = $delta( $methPct  , $prev['methods']['pct'] ?? null , $tCme  , $prev['methods']['cme']  ?? null , 'methods' );
+$classDelta = $delta( $classPct , $prev['classes']['pct'] ?? null , $tCCls , $prev['classes']['ccls'] ?? null , 'classes' );
 
 // --- Render -----------------------------------------------------------------
 
@@ -171,8 +193,9 @@ $o[] = '## Summary';
 $o[] = '';
 $o[] = '| Metric | Coverage | Δ since last run | |';
 $o[] = '|---|---|---|---|';
-$o[] = sprintf( '| **Lines** | %.2f%% (%d/%d) | %s | `%s` |'   , $linePct , $tCst , $tSt , $lineDelta ?: '—' , $bar( $linePct ) );
-$o[] = sprintf( '| **Methods** | %.2f%% (%d/%d) | %s | `%s` |' , $methPct , $tCme , $tMe , $methDelta ?: '—' , $bar( $methPct ) );
+$o[] = sprintf( '| **Lines** | %.2f%% (%d/%d) | %s | `%s` |'   , $linePct  , $tCst  , $tSt  , $lineDelta  ?: '—' , $bar( $linePct ) );
+$o[] = sprintf( '| **Methods** | %.2f%% (%d/%d) | %s | `%s` |' , $methPct  , $tCme  , $tMe  , $methDelta  ?: '—' , $bar( $methPct ) );
+$o[] = sprintf( '| **Classes** | %.2f%% (%d/%d) | %s | `%s` |' , $classPct , $tCCls , $tCls , $classDelta ?: '—' , $bar( $classPct ) );
 $o[] = '';
 $o[] = '## Coverage by directory (lines)';
 $o[] = '';
@@ -242,8 +265,9 @@ file_put_contents( $outPath , implode( "\n" , $o ) . "\n" );
 
 $history[] = [
     'ts'      => $now ,
-    'lines'   => [ 'cst' => $tCst , 'st' => $tSt , 'pct' => round( $linePct , 2 ) ] ,
-    'methods' => [ 'cme' => $tCme , 'me' => $tMe , 'pct' => round( $methPct , 2 ) ] ,
+    'lines'   => [ 'cst'  => $tCst  , 'st'  => $tSt  , 'pct' => round( $linePct  , 2 ) ] ,
+    'methods' => [ 'cme'  => $tCme  , 'me'  => $tMe  , 'pct' => round( $methPct  , 2 ) ] ,
+    'classes' => [ 'ccls' => $tCCls , 'cls' => $tCls , 'pct' => round( $classPct , 2 ) ] ,
 ];
 
 // Keep the log bounded — only the last 50 runs are useful.
