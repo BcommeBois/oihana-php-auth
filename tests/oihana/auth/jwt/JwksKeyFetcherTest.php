@@ -2,6 +2,13 @@
 
 namespace tests\oihana\auth\jwt;
 
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\ConnectException;
+use GuzzleHttp\Handler\MockHandler;
+use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Psr7\Request;
+use GuzzleHttp\Psr7\Response;
+
 use Memcached;
 
 use oihana\auth\jwt\JwksKeyFetcher;
@@ -35,6 +42,39 @@ class JwksKeyFetcherTest extends TestCase
     }
 
     /**
+     * Tests that getKeys fetches from the endpoint on a cache miss and caches
+     * the raw JSON before parsing it.
+     */
+    public function testGetKeysFetchesAndCachesOnCacheMiss() :void
+    {
+        $stored = null ;
+
+        $cache = $this->createStub( Memcached::class ) ;
+        $cache->method( 'get' )->willReturn( false ) ;
+        $cache->method( 'set' )->willReturnCallback
+        (
+            function ( $key , $value , $ttl ) use ( &$stored ) : bool
+            {
+                $stored = [ $key , $value , $ttl ] ;
+                return true ;
+            }
+        ) ;
+
+        $client = $this->mockClient( new Response( 200 , [] , self::JWKS_JSON ) ) ;
+
+        $fetcher = new JwksKeyFetcher( $cache , 'https://example.com/.well-known/jwks.json' , null , $client ) ;
+
+        $keys = $fetcher->getKeys() ;
+
+        $this->assertArrayHasKey( 'test-key-1' , $keys ) ;
+        $this->assertSame
+        (
+            [ JwksKeyFetcher::CACHE_KEY , self::JWKS_JSON , JwksKeyFetcher::CACHE_TTL ] ,
+            $stored
+        ) ;
+    }
+
+    /**
      * Tests that getKeys returns empty array when cache is empty and fetch fails.
      */
     public function testGetKeysReturnsEmptyOnCacheMissAndFetchFailure() :void
@@ -43,8 +83,12 @@ class JwksKeyFetcherTest extends TestCase
 
         $cache->method( 'get' )->willReturn( false ) ;
 
-        // Invalid URI will cause Guzzle to fail
-        $fetcher = new JwksKeyFetcher( $cache , 'https://invalid.nonexistent.localhost/jwks' ) ;
+        $client = $this->mockClient
+        (
+            new ConnectException( 'connection refused' , new Request( 'GET' , 'https://example.com/jwks' ) )
+        ) ;
+
+        $fetcher = new JwksKeyFetcher( $cache , 'https://example.com/jwks' , null , $client ) ;
 
         $keys = $fetcher->getKeys() ;
 
@@ -118,5 +162,16 @@ class JwksKeyFetcherTest extends TestCase
     public function testCacheTtlConstant() :void
     {
         $this->assertSame( 3600 , JwksKeyFetcher::CACHE_TTL ) ;
+    }
+
+    /**
+     * Builds a Guzzle client whose single queued result is the given response
+     * or exception, so the JWKS fetch path runs without touching the network.
+     *
+     * @param Response|\Throwable $result
+     */
+    private function mockClient( $result ) :Client
+    {
+        return new Client( [ 'handler' => HandlerStack::create( new MockHandler( [ $result ] ) ) ] ) ;
     }
 }
