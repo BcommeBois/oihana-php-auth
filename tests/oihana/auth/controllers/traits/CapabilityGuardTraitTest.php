@@ -13,7 +13,7 @@ use oihana\enums\http\RequestAttribute;
 use oihana\controllers\enums\ControllerParam;
 use oihana\exceptions\http\Error403;
 
-use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\CoversTrait;
 use PHPUnit\Framework\TestCase;
 
 use Psr\Http\Message\ServerRequestInterface;
@@ -45,7 +45,7 @@ class CapabilityGuardFixture
     }
 }
 
-#[CoversClass( CapabilityGuardTrait::class )]
+#[CoversTrait( CapabilityGuardTrait::class )]
 class CapabilityGuardTraitTest extends TestCase
 {
     private const string USER_ID         = 'user-abc-123' ;

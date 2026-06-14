@@ -10,7 +10,7 @@ use oihana\auth\controllers\traits\PermissionAuthorizerTrait;
 use oihana\enums\http\RequestAttribute;
 
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
-use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\CoversTrait;
 use PHPUnit\Framework\TestCase;
 
 use Slim\Psr7\Factory\ServerRequestFactory;
@@ -44,7 +44,7 @@ final class PermissionAuthorizerTraitFixture
     }
 }
 
-#[CoversClass( PermissionAuthorizerTrait::class )]
+#[CoversTrait( PermissionAuthorizerTrait::class )]
 #[AllowMockObjectsWithoutExpectations]
 final class PermissionAuthorizerTraitTest extends TestCase
 {

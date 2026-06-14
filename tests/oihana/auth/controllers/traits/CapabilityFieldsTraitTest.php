@@ -14,7 +14,7 @@ use oihana\enums\http\RequestAttribute;
 use oihana\controllers\enums\ControllerParam;
 use oihana\exceptions\http\Error403;
 
-use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\CoversTrait;
 use PHPUnit\Framework\TestCase;
 
 use Psr\Http\Message\ServerRequestInterface;
@@ -44,7 +44,7 @@ class CapabilityFieldsFixture
     }
 }
 
-#[CoversClass( CapabilityFieldsTrait::class )]
+#[CoversTrait( CapabilityFieldsTrait::class )]
 class CapabilityFieldsTraitTest extends TestCase
 {
     private const string USER_ID            = 'user-fields-001' ;
