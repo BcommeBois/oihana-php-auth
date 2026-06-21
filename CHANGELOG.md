@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-21
+
+Dependency refactor: `php-auth` now depends on the focused
+`oihana/php-controllers` package instead of the monolithic
+`oihana/php-system`. No code or public-API change.
+
 ### Changed
 
 - Dependencies: replaced `oihana/php-system` with the focused `oihana/php-controllers` package (which transitively brings `oihana/php-models`, `oihana/php-logging` and `oihana/php-traits`). `php-auth` only consumes the `oihana\controllers` namespace (`ControllerParam`, `PrepareFilter`, `PrepareSearch`, `PrepareSkin`), so this drops the heavy Slim/Twig/Symfony stack that `php-system` pulled in. No code or public-API change.
