@@ -69,7 +69,6 @@ trait PermissionAuthorizerTrait
     protected function initializePermissionSubjectResolver( ?PermissionSubjectResolverInterface $resolver = null ) : static
     {
         $this->permissionSubjectResolver = $resolver ;
-
         return $this ;
     }
 

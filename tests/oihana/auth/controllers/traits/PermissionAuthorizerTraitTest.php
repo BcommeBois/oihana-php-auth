@@ -4,6 +4,7 @@ namespace tests\oihana\auth\controllers\traits;
 
 use Casbin\Exceptions\CasbinException;
 
+use Closure;
 use oihana\auth\casbin\CapabilityEnforcer;
 use oihana\auth\PermissionSubjectResolverInterface;
 use oihana\auth\controllers\traits\PermissionAuthorizerTrait;
@@ -82,7 +83,7 @@ final class PermissionAuthorizerTraitTest extends TestCase
     private function makeResolver( array $map ) : PermissionSubjectResolverInterface
     {
         $resolver = $this->getMockBuilder( PermissionSubjectResolverInterface::class )
-            ->onlyMethods([ 'resolve' , 'getMap' ])
+            ->onlyMethods([ 'resolve' , 'getMap' , 'invalidate' ])
             ->getMock() ;
 
         $resolver->method( 'resolve' )->willReturnCallback( fn( string $s ) => $map[ $s ] ?? null ) ;

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING** — `oihana\auth\PermissionSubjectResolverInterface` now extends `oihana\interfaces\Invalidable` (from `oihana/php-core`). Implementors must add an `invalidate() : void` method that drops the cached subject → `(object, action)` map, so a policy change can force the next `resolve()` / `getMap()` to rebuild it. Test doubles built with `getMockBuilder()->onlyMethods([...])` must list `invalidate` as well, otherwise the generated double is abstract and the test process dies.
+- Testing: upgraded PHPUnit from `^12` to `^13` (13.2.5), which also pulls `phpunit/php-code-coverage` 14.x and the matching `sebastian/*` majors. `phpunit.xml` now points at the 13.2 schema; no configuration option was deprecated by the upgrade. Note that PHPUnit 13 requires **PHP >= 8.4.1**, a stricter floor than the library's own `>=8.4` — contributors on 8.4.0 need a patch upgrade to install the dev dependencies. The suite passes unchanged: 181 tests, 100% line / method / class coverage.
+
+### Added
+
+- `tests/oihana/auth/PermissionSubjectResolverInterfaceTest.php`: reflection-based contract test locking down the resolver surface — the `Invalidable` inheritance, the three declared methods, the `invalidate() : void` signature, and the fact that a PHPUnit double can satisfy the whole contract. It is marked `#[CoversNothing]` on purpose: an interface holds no executable line, so declaring it as a coverage target raises a PHPUnit warning that `failOnWarning` turns into a failed suite.
+
 ## [0.3.0] - 2026-06-21
 
 Dependency refactor: `php-auth` now depends on the focused

@@ -2,6 +2,8 @@
 
 namespace oihana\auth;
 
+use oihana\interfaces\Invalidable;
+
 /**
  * Permission subject resolution contract — backend-agnostic.
  *
@@ -20,18 +22,8 @@ namespace oihana\auth;
  * @package oihana\auth
  * @author  Marc Alcaraz
  */
-interface PermissionSubjectResolverInterface
+interface PermissionSubjectResolverInterface extends Invalidable
 {
-    /**
-     * Returns the `(object, action)` couple bound to a permission subject,
-     * or `null` when the subject is unknown.
-     *
-     * @param string $subject The permission subject label, e.g. `roles.permissions:list`.
-     *
-     * @return array{object: string, action: string}|null
-     */
-    public function resolve( string $subject ) : ?array ;
-
     /**
      * Returns the full subject → (object, action) map.
      *
@@ -42,4 +34,14 @@ interface PermissionSubjectResolverInterface
      * @return array<string, array{object: string, action: string}>
      */
     public function getMap() : array ;
+
+    /**
+     * Returns the `(object, action)` couple bound to a permission subject,
+     * or `null` when the subject is unknown.
+     *
+     * @param string $subject The permission subject label, e.g. `roles.permissions:list`.
+     *
+     * @return array{object: string, action: string}|null
+     */
+    public function resolve( string $subject ) : ?array ;
 }
