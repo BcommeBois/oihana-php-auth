@@ -8,8 +8,8 @@ namespace oihana\auth\enums\permissions\traits ;
  *
  * Grouped in a dedicated trait so the master {@see \oihana\auth\enums\AuthPermissions}
  * class stays flat while source files remain resource-focused. Each constant
- * value must match a `subject` declared in `api/configs/auth-seed.toml` — this
- * invariant is enforced by the permission consistency tests.
+ * value is a permission subject : an application that grants it must declare
+ * the same subject in its seed of permissions.
  *
  * Note: only constants required from PHP code live here. Subjects that are
  * only referenced from the role mapping in the seed (`me.activities:list`,

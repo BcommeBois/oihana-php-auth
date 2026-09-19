@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **BREAKING** — `oihana\auth\PermissionSubjectResolverInterface` now extends `oihana\interfaces\Invalidable` (from `oihana/php-core`). Implementors must add an `invalidate() : void` method that drops the cached subject → `(object, action)` map, so a policy change can force the next `resolve()` / `getMap()` to rebuild it. Test doubles built with `getMockBuilder()->onlyMethods([...])` must list `invalidate` as well, otherwise the generated double is abstract and the test process dies.
+- Documentation: the permission traits (`Me`, `Users`, `Roles`, `Policies`, `Services`) and `AuthPermissions` no longer name a file or a test suite of one application (`api/configs/auth-seed.toml`, `App\Enums\Permissions`, `AuthSeedTest`) — none of them exists in this library. They now state the invariant itself : each constant is a permission subject, which an application granting it must declare in its own seed of permissions. No code change.
 - Testing: upgraded PHPUnit from `^12` to `^13` (13.2.5), which also pulls `phpunit/php-code-coverage` 14.x and the matching `sebastian/*` majors. `phpunit.xml` now points at the 13.2 schema; no configuration option was deprecated by the upgrade. Note that PHPUnit 13 requires **PHP >= 8.4.1**, a stricter floor than the library's own `>=8.4` — contributors on 8.4.0 need a patch upgrade to install the dev dependencies. The suite passes unchanged: 181 tests, 100% line / method / class coverage.
 
 ### Added

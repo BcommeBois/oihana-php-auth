@@ -20,14 +20,13 @@ use oihana\reflect\traits\ConstantsTrait;
  * the resource name (pluralized to match the subject convention,
  * e.g. `USERS_LIST`).
  *
- * Projects extend this class to add their own business-specific
- * permissions (see `App\Enums\Permissions`).
+ * An application extends this class to add its own business-specific
+ * permissions, so a single class names every subject it uses.
  *
- * Invariant: every constant value must correspond to a
- * `[[permissions]].subject` declared in the relevant seed TOML
- * (`auth-seed.toml` for entries defined here, project seeds for
- * extending classes). The `AuthSeedTest` / `BusinessSeedTest`
- * suites enforce this at build time.
+ * Invariant: every constant value is a permission subject. An
+ * application that grants it must declare the same subject in its seed
+ * of permissions — the application, not this library, holds the seed
+ * and the test that keeps the two in step.
  *
  * @package oihana\auth\enums
  * @author  Marc Alcaraz
