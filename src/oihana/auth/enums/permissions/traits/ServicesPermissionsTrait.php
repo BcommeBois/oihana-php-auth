@@ -23,10 +23,11 @@ namespace oihana\auth\enums\permissions\traits ;
 trait ServicesPermissionsTrait
 {
     /**
-     * Allows listing services through `GET /services`. Also doubles
-     * as the field-level gate for the inverse `services[]` projection
-     * exposed on a parent resource (e.g. `GET /policies/{id}?skin=full`)
-     * — same gating semantics, no dedicated sub-resource permission needed.
+     * Allows listing services through `GET /services`. The inverse
+     * `services[]` projection of a policy is gated by its own subject,
+     * {@see PoliciesPermissionsTrait::POLICIES_SERVICES_LIST} : browsing
+     * every service and seeing which ones depend on a policy are two
+     * separate rights.
      */
     public const string SERVICES_LIST = 'services:list' ;
 

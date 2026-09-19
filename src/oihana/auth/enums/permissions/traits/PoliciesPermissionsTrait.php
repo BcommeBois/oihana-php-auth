@@ -7,8 +7,8 @@ namespace oihana\auth\enums\permissions\traits ;
  *
  * Grouped in a dedicated trait so the master {@see \oihana\auth\enums\AuthPermissions}
  * class stays flat while source files remain resource-focused. Each constant
- * value must match a `subject` declared in `api/configs/auth-seed.toml` — this
- * invariant is enforced by the permission consistency tests.
+ * value is a permission subject : an application that grants it must declare
+ * the same subject in its seed of permissions.
  *
  * The `*_LIST` subjects below double as field-level gates for the `?skin=full`
  * projection on `GET /policies` and `GET /policies/{id}`. They are declared on
@@ -17,8 +17,8 @@ namespace oihana\auth\enums\permissions\traits ;
  * (the `*Count` companion field stays visible regardless, unless explicitly
  * gated).
  *
- * The inverse view (`roles[]`) gets its own dedicated subject — same
- * convention as the direct sub-resource subjects (e.g.
+ * The inverse views (`roles[]`, `services[]`) each get their own dedicated
+ * subject — same convention as the direct sub-resource subjects (e.g.
  * `roles.permissions:list`).
  *
  * @package oihana\auth\enums\permissions\traits
@@ -48,10 +48,22 @@ trait PoliciesPermissionsTrait
      * other (e.g. an auditor inspecting a specific policy's footprint vs.
      * browsing all roles).
      *
-     * The matching HTTP route `GET /policies/{id}/roles` is not registered
-     * yet ; the seed entry already maps the subject to the future route's
-     * `(object, action)` couple, so adding the route later is a pure Slim
-     * registration with no permission migration.
+     * Also gates the dedicated route that lists those roles
+     * (`GET /policies/{id}/roles`), when an application registers one.
      */
     public const string POLICIES_ROLES_LIST = 'policies.roles:list' ;
+
+    /**
+     * Allows listing the services that depend on a policy — the services
+     * the policy is attached to — and gates the inverse `services[]` field
+     * projection of `GET /policies` and `GET /policies/{id}` under
+     * `?skin=full`. Distinct from the global `services:list` (browse the
+     * whole inventory) — a caller may be allowed to see one without the
+     * other (e.g. an auditor checking which clients a policy change would
+     * reach vs. browsing every client).
+     *
+     * Also gates the dedicated route that lists those services
+     * (`GET /policies/{id}/services`), when an application registers one.
+     */
+    public const string POLICIES_SERVICES_LIST = 'policies.services:list' ;
 }

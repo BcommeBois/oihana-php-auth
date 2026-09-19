@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `PoliciesPermissionsTrait::POLICIES_SERVICES_LIST` (`policies.services:list`), exposed on `AuthPermissions` : lists the services that depend on a policy, and gates the inverse `services[]` projection of `GET /policies` and `GET /policies/{id}` under `?skin=full` — the twin of `POLICIES_ROLES_LIST` for the other inverse view. Distinct from `services:list`, so browsing every service and seeing which ones depend on a policy stay two separate rights. The docblock of `SERVICES_LIST` no longer claims it gates that projection, and the one of `POLICIES_ROLES_LIST` no longer says its route « is not registered yet » — a state of one application, not of the library.
 - `tests/oihana/auth/PermissionSubjectResolverInterfaceTest.php`: reflection-based contract test locking down the resolver surface — the `Invalidable` inheritance, the three declared methods, the `invalidate() : void` signature, and the fact that a PHPUnit double can satisfy the whole contract. It is marked `#[CoversNothing]` on purpose: an interface holds no executable line, so declaring it as a coverage target raises a PHPUnit warning that `failOnWarning` turns into a failed suite.
 
 ## [0.3.0] - 2026-06-21
