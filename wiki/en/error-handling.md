@@ -9,37 +9,51 @@ This page lists the exceptions thrown by the library and the recommended way to 
 | Exception | Origin | Recovery |
 |---|---|---|
 | [`IdTokenValidationException`](../../src/oihana/auth/exceptions/IdTokenValidationException.php) | Library `oihana/php-auth` | Return a **401 Unauthorized** |
+| [`IdTokenUnverifiableException`](../../src/oihana/auth/exceptions/IdTokenUnverifiableException.php) | Library `oihana/php-auth` — extends the previous one | Return a **503 Service Unavailable**: the token could not be checked |
 | [`Casbin\Exceptions\CasbinException`](https://github.com/php-casbin/php-casbin) | External `casbin/casbin` | Return **500 Internal Server Error** (fail-closed) |
 
 ## IdTokenValidationException
 
-Thrown by [`IdTokenValidator::validate()`](../../src/oihana/auth/jwt/IdTokenValidator.php) in 4 cases:
+Thrown by [`IdTokenValidator::validate()`](../../src/oihana/auth/jwt/IdTokenValidator.php) when the token was **checked and turned down**:
 
 | Case | Message |
 |---|---|
-| Invalid signature or malformed JWT | `id_token signature or format invalid` |
+| Invalid signature, malformed JWT, or expired JWT (`exp` claim) | `id_token signature or format invalid` |
 | `iss` does not match `expectedIssuer` | `id_token issuer mismatch: expected …, got …` |
 | `sub` missing or different from `expectedSub` | `id_token sub does not match the access token sub` |
-| Expired JWT (`exp` claim) | Delegated to `firebase/php-jwt` — propagates `ExpiredException` |
+
+An expired token does not let the `ExpiredException` of `firebase/php-jwt` through: the validator catches it, and the token comes out like the other refusals.
+
+## IdTokenUnverifiableException
+
+Thrown by [`IdTokenValidator::validate()`](../../src/oihana/auth/jwt/IdTokenValidator.php) when the token **could not be checked**: the signing keys are neither cached nor reachable. Nothing is known of the token — it may be perfectly good.
+
+| Case | Message |
+|---|---|
+| `JwksKeyFetcher` serves no key (`[]`), or reading the keys raises | `id_token could not be verified: the signing keys are out of reach` |
+| Key rotation: the cached keys do not verify the token, and the new ones cannot be read | same |
+
+🚨 **This is not an invalid token.** Answering it as one tells the caller its token is wrong while the identity provider is merely out of reach. An application answers it with a `503`, and keeps the session.
+
+🔑 **It extends `IdTokenValidationException`, on purpose.** Code written before it catches the parent and behaves as it did; telling the two apart is opt-in, by catching this one **first**.
 
 ### Catch pattern
 
 ```php
-use Firebase\JWT\ExpiredException ;
-
+use oihana\auth\exceptions\IdTokenUnverifiableException ;
 use oihana\auth\exceptions\IdTokenValidationException ;
 
 try
 {
     $claims = $validator->validate( $idToken , expectedSub: $userId ) ;
 }
-catch ( ExpiredException $e )
+catch ( IdTokenUnverifiableException $e )
 {
-    // Token expired — return 401 with reason: token_expired
+    // The keys are out of reach — return 503, keep the session, retry later
 }
 catch ( IdTokenValidationException $e )
 {
-    // Invalid signature or claims — return 401 with reason: invalid_token
+    // Signature, expiry or claims refused — return 401
 }
 ```
 

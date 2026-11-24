@@ -52,7 +52,7 @@ The library exposes two classes:
 | Class | Role |
 |---|---|
 | [`JwksKeyFetcher`](../../src/oihana/auth/jwt/JwksKeyFetcher.php) | Fetches JWKS public keys from an OIDC endpoint. Caches via Memcached; one refresh per minute at most, held in the cache and therefore valid from one process to the next; a failure remembered for a few seconds so an endpoint that is down is not called again. Fail-soft: returns `[]` when no key can be served — see [Error handling](error-handling.md#silent-jwks-fetch-failure). |
-| [`IdTokenValidator`](../../src/oihana/auth/jwt/IdTokenValidator.php) | Validates the signature + issuer (`iss`) + subject (`sub`) of a JWT using `JwksKeyFetcher`. Throws `IdTokenValidationException` on failure. |
+| [`IdTokenValidator`](../../src/oihana/auth/jwt/IdTokenValidator.php) | Validates the signature + issuer (`iss`) + subject (`sub`) of a JWT using `JwksKeyFetcher`. Throws `IdTokenValidationException` when the token is turned down, and `IdTokenUnverifiableException` — which extends it — when it could not be checked, the keys being out of reach. |
 
 ### JWT helpers
 
@@ -113,6 +113,7 @@ use Psr\Http\Server\RequestHandlerInterface ;
 
 use oihana\auth\casbin\CapabilityEnforcer ;
 use oihana\auth\jwt\IdTokenValidator ;
+use oihana\auth\exceptions\IdTokenUnverifiableException ;
 use oihana\auth\exceptions\IdTokenValidationException ;
 use oihana\enums\http\RequestAttribute ;
 
@@ -140,6 +141,11 @@ final class AuthMiddleware implements MiddlewareInterface
         try
         {
             $this->validator->validate( $token , expectedSub: $sub ) ;
+        }
+        catch ( IdTokenUnverifiableException $e )
+        {
+            // The keys are out of reach: nothing is known of the token. 503, not 401.
+            return $this->unavailable( $e->getMessage() ) ;
         }
         catch ( IdTokenValidationException $e )
         {
@@ -175,8 +181,8 @@ Contract with the controllers: they consume the `RequestAttribute::USER_ID` attr
 
 | Piece | Responsibility | Fail-mode |
 |---|---|---|
-| JWKS fetch | Fetch public keys | **Fail-soft** — returns `[]`, JWT validation then fails cleanly |
-| JWT validation | Signature + iss + sub | **Fail-loud** — `IdTokenValidationException` |
+| JWKS fetch | Fetch public keys | **Fail-soft** — returns `[]` when no key can be served |
+| JWT validation | Signature + iss + sub | **Fail-loud** — `IdTokenValidationException` for a token turned down, `IdTokenUnverifiableException` when the keys are missing |
 | Casbin enforce | Policy decision | **Fail-closed recommended** — `CasbinException` → access denied |
 | Field-level gating | Selective projection | **Silent fail-closed** — key absent, never a 500 |
 

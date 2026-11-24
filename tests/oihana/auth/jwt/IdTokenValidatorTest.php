@@ -5,6 +5,7 @@ namespace tests\oihana\auth\jwt ;
 use Firebase\JWT\JWT ;
 use Firebase\JWT\Key ;
 
+use oihana\auth\exceptions\IdTokenUnverifiableException ;
 use oihana\auth\exceptions\IdTokenValidationException ;
 use oihana\auth\jwt\IdTokenValidator ;
 use oihana\auth\jwt\JwksKeyFetcher ;
@@ -12,6 +13,7 @@ use oihana\auth\jwt\JwksKeyFetcher ;
 use PHPUnit\Framework\Attributes\CoversClass ;
 use PHPUnit\Framework\TestCase ;
 
+use RuntimeException ;
 use stdClass ;
 
 #[CoversClass( IdTokenValidator::class )]
@@ -21,13 +23,15 @@ class IdTokenValidatorTest extends TestCase
     private const string EXPECTED_SUB    = 'user-123' ;
 
     /**
-     * validate() rejects a malformed id_token (decode failure).
+     * validate() rejects a malformed id_token (decode failure). The keys are
+     * there : this is a token that was checked, and turned down.
      */
     public function testValidateRejectsMalformedIdToken() :void
     {
+        [ , $public ] = $this->makeKeyPair() ;
+
         $fetcher = $this->createStub( JwksKeyFetcher::class ) ;
-        $fetcher->method( 'getKeys'     )->willReturn( [] ) ;
-        $fetcher->method( 'refreshKeys' )->willReturn( [] ) ;
+        $fetcher->method( 'getKeys' )->willReturn( [ 'test-kid' => new Key( $public , 'RS256' ) ] ) ;
 
         $validator = new IdTokenValidator( $fetcher , self::EXPECTED_ISSUER ) ;
 
@@ -197,6 +201,128 @@ class IdTokenValidatorTest extends TestCase
         $this->expectExceptionMessage( 'signature or format invalid' ) ;
 
         $validator->validate( $jwt , self::EXPECTED_SUB ) ;
+    }
+
+    // =========================================================================
+    // A token that could not be checked is not a token that failed
+    // =========================================================================
+
+    /**
+     * 🚨 The fetcher answers an empty set when the keys are neither cached nor
+     * reachable. Nothing is known of the token — which is correctly signed here —
+     * and it is not reported as invalid.
+     */
+    public function testValidateDoesNotJudgeATokenWithoutAnyKey() :void
+    {
+        [ $private ] = $this->makeKeyPair() ;
+
+        $fetcher = $this->createStub( JwksKeyFetcher::class ) ;
+        $fetcher->method( 'getKeys' )->willReturn( [] ) ;
+
+        $validator = new IdTokenValidator( $fetcher , self::EXPECTED_ISSUER ) ;
+
+        $this->expectException( IdTokenUnverifiableException::class ) ;
+        $this->expectExceptionMessage( IdTokenUnverifiableException::MESSAGE ) ;
+
+        $validator->validate( $this->signJwt( $this->jwtPayload() , $private ) , self::EXPECTED_SUB ) ;
+    }
+
+    /**
+     * Keys that cannot be read at all are not a refusal either, and what stopped
+     * the read is kept.
+     */
+    public function testValidateDoesNotJudgeATokenWhenTheKeysCannotBeRead() :void
+    {
+        [ $private ] = $this->makeKeyPair() ;
+
+        $failure = new RuntimeException( 'the cache is down' ) ;
+
+        $fetcher = $this->createStub( JwksKeyFetcher::class ) ;
+        $fetcher->method( 'getKeys' )->willThrowException( $failure ) ;
+
+        $validator = new IdTokenValidator( $fetcher , self::EXPECTED_ISSUER ) ;
+
+        try
+        {
+            $validator->validate( $this->signJwt( $this->jwtPayload() , $private ) , self::EXPECTED_SUB ) ;
+
+            $this->fail( 'The token was judged without a key' ) ;
+        }
+        catch( IdTokenUnverifiableException $exception )
+        {
+            $this->assertSame( $failure , $exception->getPrevious() ) ;
+        }
+    }
+
+    /**
+     * 🚨 A rotation whose new keys cannot be fetched : the cached keys did not
+     * verify the token, and the fresh ones are out of reach. The token may be
+     * signed by a new key — it is not turned down.
+     */
+    public function testValidateDoesNotJudgeATokenWhenARotationCannotBeFollowed() :void
+    {
+        [ $private ]       = $this->makeKeyPair() ;
+        [ , $otherPublic ] = $this->makeKeyPair() ;
+
+        $fetcher = $this->createStub( JwksKeyFetcher::class ) ;
+        $fetcher->method( 'getKeys'     )->willReturn( [ self::KID => new Key( $otherPublic , 'RS256' ) ] ) ;
+        $fetcher->method( 'refreshKeys' )->willReturn( [] ) ;
+
+        $validator = new IdTokenValidator( $fetcher , self::EXPECTED_ISSUER ) ;
+
+        $this->expectException( IdTokenUnverifiableException::class ) ;
+
+        $validator->validate( $this->signJwt( $this->jwtPayload() , $private ) , self::EXPECTED_SUB ) ;
+    }
+
+    /**
+     * 🔑 Code written before the new exception existed catches the parent, and
+     * keeps behaving as it did : telling the two apart is opt-in.
+     */
+    public function testAnOutageIsStillCaughtByCodeThatCatchesTheParent() :void
+    {
+        $fetcher = $this->createStub( JwksKeyFetcher::class ) ;
+        $fetcher->method( 'getKeys' )->willReturn( [] ) ;
+
+        $validator = new IdTokenValidator( $fetcher , self::EXPECTED_ISSUER ) ;
+
+        $caught = null ;
+
+        try
+        {
+            $validator->validate( 'any.token.here' , self::EXPECTED_SUB ) ;
+        }
+        catch( IdTokenValidationException $exception )
+        {
+            $caught = $exception ;
+        }
+
+        $this->assertInstanceOf( IdTokenUnverifiableException::class , $caught ) ;
+    }
+
+    /**
+     * What does not change : a token checked against the keys and turned down is
+     * the parent exception, and only that.
+     */
+    public function testATokenTurnedDownIsNotAnOutage() :void
+    {
+        [ $private , $public ] = $this->makeKeyPair() ;
+
+        $fetcher = $this->createStub( JwksKeyFetcher::class ) ;
+        $fetcher->method( 'getKeys' )->willReturn( [ self::KID => new Key( $public , 'RS256' ) ] ) ;
+
+        $validator = new IdTokenValidator( $fetcher , self::EXPECTED_ISSUER ) ;
+
+        try
+        {
+            $validator->validate( $this->signJwt( $this->jwtPayload( expiresAt : 1_000_000 ) , $private ) , self::EXPECTED_SUB ) ;
+
+            $this->fail( 'An expired token was accepted' ) ;
+        }
+        catch( IdTokenValidationException $exception )
+        {
+            $this->assertNotInstanceOf( IdTokenUnverifiableException::class , $exception ) ;
+        }
     }
 
     // =========================================================================

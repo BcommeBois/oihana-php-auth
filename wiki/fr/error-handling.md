@@ -9,37 +9,51 @@ Cette page liste les exceptions levées par la bibliothèque et la façon recomm
 | Exception | Origine | Recovery |
 |---|---|---|
 | [`IdTokenValidationException`](../../src/oihana/auth/exceptions/IdTokenValidationException.php) | Lib `oihana/php-auth` | Renvoyer un **401 Unauthorized** |
+| [`IdTokenUnverifiableException`](../../src/oihana/auth/exceptions/IdTokenUnverifiableException.php) | Lib `oihana/php-auth` — étend la précédente | Renvoyer un **503 Service Unavailable** : le token n'a pas pu être vérifié |
 | [`Casbin\Exceptions\CasbinException`](https://github.com/php-casbin/php-casbin) | Lib externe `casbin/casbin` | Renvoyer un **500 Internal Server Error** (fail-closed) |
 
 ## IdTokenValidationException
 
-Levée par [`IdTokenValidator::validate()`](../../src/oihana/auth/jwt/IdTokenValidator.php) dans 4 cas :
+Levée par [`IdTokenValidator::validate()`](../../src/oihana/auth/jwt/IdTokenValidator.php) quand le token a été **vérifié et refusé** :
 
 | Cas | Message |
 |---|---|
-| Signature invalide ou JWT mal formé | `id_token signature or format invalid` |
+| Signature invalide, JWT mal formé, ou JWT expiré (claim `exp`) | `id_token signature or format invalid` |
 | `iss` ne correspond pas à `expectedIssuer` | `id_token issuer mismatch: expected …, got …` |
 | `sub` manquant ou différent de `expectedSub` | `id_token sub does not match the access token sub` |
-| JWT expiré (claim `exp`) | délégué à `firebase/php-jwt` — laisse remonter une `ExpiredException` |
+
+Un token expiré ne laisse pas remonter l'`ExpiredException` de `firebase/php-jwt` : le validateur l'attrape, et le token sort comme les autres refus.
+
+## IdTokenUnverifiableException
+
+Levée par [`IdTokenValidator::validate()`](../../src/oihana/auth/jwt/IdTokenValidator.php) quand le token **n'a pas pu être vérifié** : les clés de signature ne sont ni en cache ni joignables. On ne sait rien du token — il est peut-être parfaitement bon.
+
+| Cas | Message |
+|---|---|
+| `JwksKeyFetcher` ne sert aucune clé (`[]`), ou la lecture des clés lève | `id_token could not be verified: the signing keys are out of reach` |
+| Rotation des clés : les clés en cache ne vérifient pas le token, et les nouvelles ne peuvent pas être lues | idem |
+
+🚨 **Ce n'est pas un token invalide.** Le répondre comme tel dit à l'appelant que son token est faux alors que le fournisseur d'identité est seulement hors de portée. Une application y répond par un `503`, et garde la session.
+
+🔑 **Elle étend `IdTokenValidationException`, exprès.** Le code écrit avant elle attrape la parente et se comporte comme avant ; distinguer les deux est un choix, en attrapant celle-ci **en premier**.
 
 ### Pattern de rattrapage
 
 ```php
-use Firebase\JWT\ExpiredException ;
-
+use oihana\auth\exceptions\IdTokenUnverifiableException ;
 use oihana\auth\exceptions\IdTokenValidationException ;
 
 try
 {
     $claims = $validator->validate( $idToken , expectedSub: $userId ) ;
 }
-catch ( ExpiredException $e )
+catch ( IdTokenUnverifiableException $e )
 {
-    // Token expiré — renvoyer 401 avec reason: token_expired
+    // Les clés sont hors de portée — renvoyer 503, garder la session, réessayer plus tard
 }
 catch ( IdTokenValidationException $e )
 {
-    // Signature ou claims invalides — renvoyer 401 avec reason: invalid_token
+    // Signature, expiration ou claims refusés — renvoyer 401
 }
 ```
 

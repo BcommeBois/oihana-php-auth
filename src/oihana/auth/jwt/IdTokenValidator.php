@@ -6,6 +6,7 @@ use Firebase\JWT\ExpiredException ;
 use Firebase\JWT\JWT ;
 use Firebase\JWT\SignatureInvalidException ;
 
+use oihana\auth\exceptions\IdTokenUnverifiableException ;
 use oihana\auth\exceptions\IdTokenValidationException ;
 
 use Psr\Log\LoggerInterface ;
@@ -62,7 +63,11 @@ class IdTokenValidator
      *
      * @return object Decoded claims (firebase/php-jwt object form).
      *
-     * @throws IdTokenValidationException When any check fails.
+     * @throws IdTokenUnverifiableException When the token could not be checked at all,
+     *                                      the signing keys being out of reach. It extends
+     *                                      {@see IdTokenValidationException} : catch it first
+     *                                      to answer an outage rather than a refusal.
+     * @throws IdTokenValidationException   When any check fails.
      */
     public function validate( string $idToken , string $expectedSub ) :object
     {
@@ -119,21 +124,35 @@ class IdTokenValidator
     /**
      * Decode the id_token using cached JWKS, with one retry on key rotation.
      *
+     * 🚨 **Two answers, and they are not the same.** `null` says the token was
+     * checked and turned down — expired, malformed, signed by nobody we know. The
+     * exception says it could not be checked at all.
+     *
+     * 🔑 The keys are read **outside** the `try` that decodes, and the keys of a
+     * rotation inside a `catch` : what {@see self::keys()} raises is never caught
+     * by the clauses that turn a bad token into `null`.
+     *
      * @param string $idToken The raw id_token JWT.
      *
      * @return object|null The decoded claims, or null on signature/format failure.
+     *
+     * @throws IdTokenUnverifiableException When the signing keys cannot be read.
      */
     private function decode( string $idToken ) :?object
     {
+        $keys = $this->keys() ;
+
         try
         {
-            return JWT::decode( $idToken , $this->fetcher->getKeys() ) ;
+            return JWT::decode( $idToken , $keys ) ;
         }
         catch( SignatureInvalidException )
         {
+            $keys = $this->keys( refreshed : true ) ;
+
             try
             {
-                return JWT::decode( $idToken , $this->fetcher->refreshKeys() ) ;
+                return JWT::decode( $idToken , $keys ) ;
             }
             catch( Throwable $e )
             {
@@ -156,5 +175,42 @@ class IdTokenValidator
             ) ;
             return null ;
         }
+    }
+
+    /**
+     * The keys the token is verified with, or the reason nothing can be verified.
+     *
+     * 🚨 **An empty key set is not a key set.** The fetcher answers `[]` when the
+     * keys are neither cached nor reachable, and decoding against it raises an
+     * error the token has nothing to do with — which used to be read as a token
+     * turned down.
+     *
+     * @param bool $refreshed Whether the keys are fetched again — the retry of a key rotation.
+     *
+     * @return array The parsed key set, never empty.
+     *
+     * @throws IdTokenUnverifiableException When the keys cannot be read.
+     */
+    private function keys( bool $refreshed = false ) :array
+    {
+        try
+        {
+            $keys = $refreshed ? $this->fetcher->refreshKeys() : $this->fetcher->getKeys() ;
+        }
+        catch( Throwable $e )
+        {
+            $this->logger?->error( "IdTokenValidator: the signing keys could not be read: {$e->getMessage()}" ) ;
+
+            throw new IdTokenUnverifiableException( $e ) ;
+        }
+
+        if( $keys === [] )
+        {
+            $this->logger?->error( 'IdTokenValidator: no signing key could be served' ) ;
+
+            throw new IdTokenUnverifiableException() ;
+        }
+
+        return $keys ;
     }
 }
