@@ -70,11 +70,27 @@ Le trait [`PermissionAuthorizerTrait`](../../src/oihana/auth/controllers/traits/
 
 ## Échec silencieux du fetch JWKS
 
-Par design, [`JwksKeyFetcher::getKeys()`](../../src/oihana/auth/jwt/JwksKeyFetcher.php) **ne lève pas d'exception** quand le cache est vide et que le fetch HTTP échoue : il retourne un tableau vide `[]`.
+Par design, [`JwksKeyFetcher`](../../src/oihana/auth/jwt/JwksKeyFetcher.php) **ne lève pas d'exception** quand l'endpoint ne répond pas : `getKeys()` et `refreshKeys()` retournent un tableau vide `[]`.
 
 C'est volontaire : on ne veut pas casser la couche d'authentification à cause d'un hoquet réseau ponctuel. Mais sans clés, la validation JWT échouera ensuite avec `IdTokenValidationException` (signature invalide).
 
-Le rate-limit interne (`REFRESH_COOLDOWN = 60 s`) empêche les refresh trop rapprochés.
+🚨 **`[]` veut dire « aucune clé n'a pu être servie », jamais « ce token est refusé ».** Une application qui décode elle-même avec ces clés doit lire `[]` comme « la signature n'a pas pu être vérifiée » — un service indisponible, pas une session terminée.
+
+Ce que retournent les deux méthodes :
+
+| Situation | `getKeys()` | `refreshKeys()` |
+|---|---|---|
+| Clés en cache | les clés, sans appel | selon les lignes suivantes |
+| Un refresh a réussi il y a moins de `REFRESH_COOLDOWN` (60 s) | — | les clés en cache, sans appel |
+| L'endpoint répond | les clés, mises en cache | les nouvelles clés, qui **remplacent** celles du cache |
+| L'endpoint ne répond pas | `[]` | `[]` — **les clés en cache restent en place** pour les autres requêtes |
+| Un appel a échoué il y a moins de `FAILURE_TTL` (5 s) | `[]` si rien n'est en cache, sans appel | `[]`, sans appel |
+
+Trois entrées vivent dans le cache : `jwks:keys` (les clés), `jwks:refreshed` (un refresh vient de réussir) et `jwks:unavailable` (le dernier appel a échoué). Les deux marqueurs sont **dans le cache, pas dans l'objet** : sous un runtime qui crée un processus par requête, une limite gardée dans une propriété repartirait de zéro à chaque requête.
+
+- **Un refresh ne supprime jamais les clés avant d'avoir les nouvelles.** Un token à la signature fausse ne peut donc pas vider le cache pendant que l'endpoint est injoignable.
+- **Le cooldown n'est tenu que par un refresh réussi.** Un refresh raté ne bloque pas le suivant pendant une minute ; c'est `FAILURE_TTL` qui borne les échecs répétés.
+- **Les durées se lisent par `static::`** : une sous-classe qui redéfinit `FAILURE_TTL`, `REFRESH_COOLDOWN` ou `CACHE_TTL` change le comportement sans réécrire de méthode.
 
 ## Helpers JWT — pas d'exception
 

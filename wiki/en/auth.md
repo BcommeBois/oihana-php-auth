@@ -51,7 +51,7 @@ The library exposes two classes:
 
 | Class | Role |
 |---|---|
-| [`JwksKeyFetcher`](../../src/oihana/auth/jwt/JwksKeyFetcher.php) | Fetches JWKS public keys from an OIDC endpoint. Caches via Memcached with configurable TTL and an anti-flood rate-limit. Fail-soft: returns `[]` when the fetch fails. |
+| [`JwksKeyFetcher`](../../src/oihana/auth/jwt/JwksKeyFetcher.php) | Fetches JWKS public keys from an OIDC endpoint. Caches via Memcached; one refresh per minute at most, held in the cache and therefore valid from one process to the next; a failure remembered for a few seconds so an endpoint that is down is not called again. Fail-soft: returns `[]` when no key can be served — see [Error handling](error-handling.md#silent-jwks-fetch-failure). |
 | [`IdTokenValidator`](../../src/oihana/auth/jwt/IdTokenValidator.php) | Validates the signature + issuer (`iss`) + subject (`sub`) of a JWT using `JwksKeyFetcher`. Throws `IdTokenValidationException` on failure. |
 
 ### JWT helpers
