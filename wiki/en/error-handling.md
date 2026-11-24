@@ -84,10 +84,13 @@ What the two methods return:
 | A refresh succeeded less than `REFRESH_COOLDOWN` (60 s) ago | — | the cached keys, no call |
 | The endpoint answers | the keys, now cached | the new keys, which **replace** the cached ones |
 | The endpoint does not answer | `[]` | `[]` — **the cached keys stay in place** for the other requests |
+| The endpoint answers something that is not a key set (the error page of a proxy, a truncated document, an empty set) | `[]`, **nothing is cached** | `[]` — the cached keys stay in place |
+| The cache entry no longer parses | it is dropped, then the endpoint is called | see the rows above |
 | A call failed less than `FAILURE_TTL` (5 s) ago | `[]` when nothing is cached, no call | `[]`, no call |
 
 Three entries live in the cache: `jwks:keys` (the keys), `jwks:refreshed` (a refresh just succeeded) and `jwks:unavailable` (the last call failed). Both markers are kept **in the cache, not in the object**: under a process-per-request runtime, a limit kept in a property would start again from zero with every request.
 
+- **What is cached is what was read.** The answer of the endpoint is parsed before it is kept: cached as it came, an unreadable answer would fail every verification for `CACHE_TTL`, long after the endpoint had started answering properly again.
 - **A refresh never drops the keys before the new ones are in hand.** A token with a wrong signature therefore cannot empty the cache while the endpoint is out of reach.
 - **The cooldown is held by a refresh that succeeded only.** A failed refresh does not block the next one for a minute; repeated failures are bounded by `FAILURE_TTL`.
 - **The durations are read through `static::`**: a subclass redefining `FAILURE_TTL`, `REFRESH_COOLDOWN` or `CACHE_TTL` changes the behaviour without rewriting a method.

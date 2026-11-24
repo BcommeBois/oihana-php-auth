@@ -12,6 +12,7 @@ use xyz\oihana\schema\constants\JWTAlgorithm;
 
 use Memcached;
 use Psr\Log\LoggerInterface;
+use Throwable;
 
 /**
  * Fetches and caches JWKS public keys from a Zitadel (or any OIDC) endpoint.
@@ -31,6 +32,11 @@ use Psr\Log\LoggerInterface;
  * Neither method throws when the endpoint is out of reach : both answer `[]`, and
  * a caller that decodes against it would get an error the token has nothing to do
  * with. Read `[]` as « the signature could not be checked », not as « refused ».
+ *
+ * 🚨 **What is cached is what was read.** An answer of the endpoint is parsed
+ * before it is kept : a body that yields no key — the error page of a proxy, a
+ * truncated document, an empty key set — is a failure of the call, never an
+ * entry that would then fail every verification until it expires.
  *
  * 🔑 **The two markers live in the cache, not in the object.** Under a
  * process-per-request runtime every request builds its own fetcher : a limit
@@ -114,18 +120,30 @@ class JwksKeyFetcher
     {
         $json = $this->cache->get( static::CACHE_KEY ) ;
 
-        if( !$json )
+        if( is_string( $json ) && $json !== '' )
         {
-            $json = $this->fetch() ;
+            $keys = $this->parse( $json ) ;
+
+            if( $keys !== [] )
+            {
+                return $keys ;
+            }
+
+            // An entry that no longer parses is worth nothing, and would fail every
+            // verification until it expires : dropped, and read again from the endpoint.
+            $this->logger?->warning( 'JwksKeyFetcher: the cached JWKS cannot be read, dropped' ) ;
+
+            $this->cache->delete( static::CACHE_KEY ) ;
         }
 
-        if( !$json )
+        $keys = $this->fetch() ;
+
+        if( $keys === [] )
         {
             $this->logger?->error( 'JwksKeyFetcher: failed to fetch JWKS keys' ) ;
-            return [] ;
         }
 
-        return $this->parse( $json ) ;
+        return $keys ;
     }
 
     /**
@@ -166,35 +184,40 @@ class JwksKeyFetcher
 
         $this->logger?->info( 'JwksKeyFetcher: forced refresh of JWKS keys' ) ;
 
-        $json = $this->fetch() ;
+        $keys = $this->fetch() ;
 
-        if( !$json )
+        if( $keys === [] )
         {
             $this->cache->delete( static::REFRESHED_KEY ) ;
 
             $this->logger?->error( 'JwksKeyFetcher: the JWKS keys could not be refreshed, the cached ones are kept' ) ;
-
-            return [] ;
         }
 
-        return $this->parse( $json ) ;
+        return $keys ;
     }
 
     /**
      * Calls the JWKS endpoint, caches what it answers, and remembers a failure.
      *
      * Shared by a first read and by a forced refresh : the cache entry of the keys
-     * is only ever **written** here, never deleted, so a call that fails leaves
-     * what was cached untouched.
+     * is only ever **written** here, so a call that fails leaves what was cached
+     * untouched.
      *
-     * @return string|null The raw JWKS JSON, or null when the endpoint did not
-     * answer — now, or less than {@see self::FAILURE_TTL} seconds ago.
+     * 🚨 **The answer is parsed before it is kept.** A body that yields no key is a
+     * failure like a call that did not go through : nothing is cached, and the
+     * failure is remembered. Cached first and parsed afterwards, such a body would
+     * fail every verification for a whole {@see self::CACHE_TTL}, long after the
+     * endpoint had started answering properly again.
+     *
+     * @return array The parsed key set, or an empty array when the endpoint gave no
+     * key — it did not answer, answered something that is not a key set, or failed
+     * less than {@see self::FAILURE_TTL} seconds ago.
      */
-    private function fetch() :?string
+    private function fetch() :array
     {
         if( $this->cache->get( static::UNAVAILABLE_KEY ) )
         {
-            return null ;
+            return [] ;
         }
 
         try
@@ -207,30 +230,43 @@ class JwksKeyFetcher
             $json = '' ;
         }
 
-        if( $json === '' )
+        $keys = $json === '' ? [] : $this->parse( $json ) ;
+
+        if( $keys === [] )
         {
             $this->cache->set( static::UNAVAILABLE_KEY , time() , static::FAILURE_TTL ) ;
-            return null ;
+            return [] ;
         }
 
         $this->logger?->info( "JwksKeyFetcher: fetched JWKS from $this->jwksUri" ) ;
 
         $this->cache->set( static::CACHE_KEY , $json , static::CACHE_TTL ) ;
 
-        return $json ;
+        return $keys ;
     }
 
     /**
      * Parses a raw JWKS JSON into the key set `Firebase\JWT\JWT::decode()` reads.
      *
+     * 🔑 **What cannot be read yields no key, and says so in the logs.** The
+     * parser raises on a document that is not a key set — and PHP itself on a
+     * body that is not even a document ; here both are one more way of having no
+     * key to serve, which both callers already know how to answer.
+     *
      * @param string $json The raw JWKS JSON.
      *
-     * @return array Parsed key set.
+     * @return array Parsed key set, or an empty array when the document holds none.
      */
     private function parse( string $json ) :array
     {
-        $keySet = json_decode( $json , true ) ;
-
-        return JWK::parseKeySet( $keySet , JWTAlgorithm::RS256 ) ;
+        try
+        {
+            return JWK::parseKeySet( json_decode( $json , true ) , JWTAlgorithm::RS256 ) ;
+        }
+        catch( Throwable $e )
+        {
+            $this->logger?->error( "JwksKeyFetcher: the JWKS cannot be parsed: {$e->getMessage()}" ) ;
+            return [] ;
+        }
     }
 }

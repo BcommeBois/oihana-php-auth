@@ -84,10 +84,13 @@ Ce que retournent les deux méthodes :
 | Un refresh a réussi il y a moins de `REFRESH_COOLDOWN` (60 s) | — | les clés en cache, sans appel |
 | L'endpoint répond | les clés, mises en cache | les nouvelles clés, qui **remplacent** celles du cache |
 | L'endpoint ne répond pas | `[]` | `[]` — **les clés en cache restent en place** pour les autres requêtes |
+| L'endpoint répond autre chose qu'un jeu de clés (page d'erreur d'un relais, document tronqué, jeu vide) | `[]`, **rien n'est mis en cache** | `[]` — les clés en cache restent en place |
+| L'entrée du cache ne s'analyse plus | elle est supprimée, puis l'endpoint est appelé | selon les lignes ci-dessus |
 | Un appel a échoué il y a moins de `FAILURE_TTL` (5 s) | `[]` si rien n'est en cache, sans appel | `[]`, sans appel |
 
 Trois entrées vivent dans le cache : `jwks:keys` (les clés), `jwks:refreshed` (un refresh vient de réussir) et `jwks:unavailable` (le dernier appel a échoué). Les deux marqueurs sont **dans le cache, pas dans l'objet** : sous un runtime qui crée un processus par requête, une limite gardée dans une propriété repartirait de zéro à chaque requête.
 
+- **Ce qui est mis en cache est ce qui a été lu.** La réponse de l'endpoint est analysée avant d'être gardée : mise en cache telle quelle, une réponse illisible ferait échouer toutes les vérifications pendant `CACHE_TTL`, bien après que l'endpoint s'est remis à répondre.
 - **Un refresh ne supprime jamais les clés avant d'avoir les nouvelles.** Un token à la signature fausse ne peut donc pas vider le cache pendant que l'endpoint est injoignable.
 - **Le cooldown n'est tenu que par un refresh réussi.** Un refresh raté ne bloque pas le suivant pendant une minute ; c'est `FAILURE_TTL` qui borne les échecs répétés.
 - **Les durées se lisent par `static::`** : une sous-classe qui redéfinit `FAILURE_TTL`, `REFRESH_COOLDOWN` ou `CACHE_TTL` change le comportement sans réécrire de méthode.

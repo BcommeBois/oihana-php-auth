@@ -14,6 +14,7 @@ use Memcached;
 use oihana\auth\jwt\JwksKeyFetcher;
 
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use Throwable;
@@ -247,9 +248,88 @@ class JwksKeyFetcherTest extends TestCase
         $this->assertArrayHasKey( JwksKeyFetcher::UNAVAILABLE_KEY , $store ) ;
     }
 
+    /**
+     * What an endpoint may answer in place of a key set.
+     *
+     * @return array<string,array{0:string}>
+     */
+    public static function unreadableAnswers() :array
+    {
+        return
+        [
+            'the error page of a proxy' => [ '<html><body>502 Bad Gateway</body></html>' ] ,
+            'a truncated document'      => [ '{"keys":[{"kty":"RSA","kid":"test-key-1"' ] ,
+            'a document of another kind' => [ '{"error":"temporarily_unavailable"}' ] ,
+            'a scalar'                  => [ '42' ] ,
+            'an empty key set'          => [ '{"keys":[]}' ] ,
+        ] ;
+    }
+
+    /**
+     * 🚨 What is cached is what was read. An answer that yields no key is a failure
+     * of the call : cached as it came, it would fail every verification for a whole
+     * hour, long after the endpoint had started answering properly again.
+     */
+    #[DataProvider( 'unreadableAnswers' )]
+    public function testAnAnswerThatYieldsNoKeyIsNotCached( string $answer ) :void
+    {
+        $store = [] ;
+
+        $fetcher = new JwksKeyFetcher( $this->cache( $store ) , self::URI , null , $this->endpoint([ new Response( 200 , [] , $answer ) ]) ) ;
+
+        $this->assertSame( [] , $fetcher->getKeys() ) ;
+        $this->assertArrayNotHasKey( JwksKeyFetcher::CACHE_KEY , $store , 'nothing is cached as the keys' ) ;
+        $this->assertArrayHasKey( JwksKeyFetcher::UNAVAILABLE_KEY , $store , 'and the failure is remembered' ) ;
+    }
+
+    /**
+     * An entry cached before — by a version that cached first and parsed
+     * afterwards — is dropped the first time it is read, and the endpoint asked.
+     */
+    public function testACachedEntryThatCannotBeReadIsDroppedAndFetchedAgain() :void
+    {
+        $store = [ JwksKeyFetcher::CACHE_KEY => '<html><body>502 Bad Gateway</body></html>' ] ;
+
+        $fetcher = new JwksKeyFetcher( $this->cache( $store ) , self::URI , null , $this->endpoint([ new Response( 200 , [] , self::JWKS_JSON ) ] , $calls ) ) ;
+
+        $this->assertArrayHasKey( 'test-key-1' , $fetcher->getKeys() ) ;
+        $this->assertSame( 1 , $calls ) ;
+        $this->assertSame( self::JWKS_JSON , $store[ JwksKeyFetcher::CACHE_KEY ] ) ;
+    }
+
+    /**
+     * The same with an endpoint that is down : the entry is gone all the same, so
+     * that it does not outlive the outage.
+     */
+    public function testACachedEntryThatCannotBeReadIsDroppedEvenWhenTheEndpointIsDown() :void
+    {
+        $store = [ JwksKeyFetcher::CACHE_KEY => '{"keys":[]}' ] ;
+
+        $fetcher = new JwksKeyFetcher( $this->cache( $store ) , self::URI , null , $this->endpoint([ $this->refused() ]) ) ;
+
+        $this->assertSame( [] , $fetcher->getKeys() ) ;
+        $this->assertArrayNotHasKey( JwksKeyFetcher::CACHE_KEY , $store ) ;
+    }
+
     // ------------------------------------------------------------------
     // refreshKeys()
     // ------------------------------------------------------------------
+
+    /**
+     * 🚨 A refresh that receives something that is not a key set must not replace
+     * good keys with it : the cached ones stay, and the refresh answers nothing.
+     */
+    #[DataProvider( 'unreadableAnswers' )]
+    public function testARefreshThatReceivesNoKeyKeepsTheCachedOnes( string $answer ) :void
+    {
+        $store = [ JwksKeyFetcher::CACHE_KEY => self::JWKS_JSON ] ;
+
+        $fetcher = new JwksKeyFetcher( $this->cache( $store ) , self::URI , null , $this->endpoint([ new Response( 200 , [] , $answer ) ]) ) ;
+
+        $this->assertSame( [] , $fetcher->refreshKeys() ) ;
+        $this->assertSame( self::JWKS_JSON , $store[ JwksKeyFetcher::CACHE_KEY ] ) ;
+        $this->assertArrayNotHasKey( JwksKeyFetcher::REFRESHED_KEY , $store , 'a refresh that got no key does not hold the cooldown' ) ;
+    }
 
     /**
      * A rotation : the endpoint serves new keys, which replace the cached ones.
